@@ -12,8 +12,8 @@
 # three weeks earlier in a different pipeline, and that check was never copied to this job. A check
 # that lives inside one script protects only that script.
 #
-# The rule: a runner's own error text is not a report. Output that fails this check is logged and
-# routed to maintenance; it is never shown to the human as content. Empty output fails too.
+# The rule: a runner's own error text is not a report. The caller logs output that fails this check
+# and routes it to maintenance instead of sending it. Empty output fails too.
 #
 # Two patterns (Error: and Execution error) are anchored to the start of a line, and every pattern
 # looks only at the first three lines, so a real report that quotes "Error:" mid-sentence still

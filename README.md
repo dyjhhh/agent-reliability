@@ -30,7 +30,7 @@ The demo walks through boot suppression, a degraded host, spaced confirmation, a
 | Two workers notice the same failure | Serialize decisions with a SQLite transaction | Concurrent observers create one pending attempt |
 | A restart forgets what is already in flight | Persist decisions, policy and the outbox | Reopening the database retains pending work |
 | A job is loaded but has never completed | Use the last successful-work timestamp | Missing evidence returns `unknown`, not `healthy` |
-| launchd skips calendar jobs when nobody is logged in | `schedule.due_slots` replays passed slots inside a two-hour catch-up window, once per slot | Sunday as 0 or 7, hourly, month and day, and midnight-crossing tests |
+| In the private deployment, launchd skipped calendar jobs while nobody was logged in | `schedule.due_slots` replays passed slots inside a two-hour catch-up window, once per slot | Sunday as 0 or 7, hourly, month and day, and midnight-crossing tests |
 | A job's log looks fresh after the job stopped | `schedule.audit` uses the newest usable evidence (dispatcher record, job artifact or non-empty log; the stronger kind wins a tie) and ignores zero-byte logs | A synthetic job that genuinely stopped is still reported `STALE` |
 | A runner's error text is sent as the report | `guards/notify-guard.sh` checks the first lines for runner and API errors before sending | A real report that quotes "Error:" still passes |
 
@@ -47,7 +47,7 @@ Start with [`reliability.py`](reliability.py), then read the [tests](tests/test_
 - A `page` decision means eligible to attempt delivery. Replaying that decision is not permission to send twice; consult the outbox. Pending attempts remain pending until explicitly resolved, and recovery cancels them.
 - SQLite covers local transaction ordering, not a distributed queue. Inputs and the database are trusted. Clock anomalies reject observations or produce `unknown-clock`; there is no automatic clock repair.
 - A fresh success receipt can still describe the wrong task. `job_health` checks freshness, not output correctness, and the notify guard catches runner error text only. A well-formed report about the wrong task passes both; that belongs in a separate task-specific evaluator.
-- The notify guard anchors only two patterns, `Error:` and `Execution error`. The other patterns, such as "rate limit exceeded", also hold back a real report that mentions them in its first three lines; the guard errs toward not sending.
+- The notify guard anchors only two patterns, `Error:` and `Execution error`. The other patterns, such as "rate limit exceeded", also hold back a real report that mentions them in its first three lines; the guard errs toward not sending. Whitespace-only output is not treated as empty, and error text below the third line is not checked.
 - `schedule.py` works on naive local times and does not model daylight-saving transitions. It does not read plists or logs, and it starts nothing.
 - Suppression does not erase the observation. Decisions remain in the local event table for inspection. This demo does not dispatch suppressed events to a maintenance system.
 
@@ -57,6 +57,6 @@ The tests are deterministic failure-path checks, not an uptime claim or a load b
 
 [Agent OS](https://github.com/dyjhhh/agent-os) · [Evaluation gates](https://github.com/dyjhhh/agent-eval-gates) · [Security hooks](https://github.com/dyjhhh/agent-security-hooks) · [Feedback loops](https://github.com/dyjhhh/self-improving-loops)
 
-Designed and built by Yujia Dong, using Claude Code and Codex as coding tools. Codex helped write the public extraction and tests; design choices and review are mine.
+Personal project by Yujia Dong · AI-assisted development. Design choices and review are mine; Claude Code and Codex assisted with implementation, including the public extraction and tests.
 
 MIT license. See [LICENSE](LICENSE).

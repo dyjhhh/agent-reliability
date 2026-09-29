@@ -14,13 +14,13 @@ flowchart LR
     D -->|No| C
     D -->|Yes| E{Pending attempt or recent delivery?}
     E -->|Yes| C
-    E -->|No or escalation| F[Pending outbox entry]
+    E -->|No, or yellow-to-red after a delivery| F[Pending outbox entry]
     F --> G{Caller acknowledgement}
     G -->|Success| H[Start dedupe window]
     G -->|Failure| I[Allow a later observation to retry]
 ```
 
-All observations, state changes and outbox decisions are committed in one SQLite transaction. The transport is outside that transaction, so this design does not promise exactly-once notification delivery.
+Each observation, its state change and any outbox entry are committed in one SQLite transaction. The transport is outside that transaction, so this design does not promise exactly-once notification delivery.
 
 Event IDs make exact retries idempotent. Reusing an ID for a different payload fails. The stored policy must match on reopen so a process cannot silently reinterpret an existing confirmation history with new thresholds.
 

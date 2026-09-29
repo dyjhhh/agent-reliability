@@ -1,7 +1,7 @@
 """Calendar replay and run-evidence audit for launchd-style jobs. Pure functions, no I/O.
 
 `due_slots` answers "which calendar slots should run now?" on a machine where the scheduler may
-not fire them itself: launchd skips calendar jobs when nobody is logged in. `audit` answers "is
+not fire them itself: on the private host, launchd skipped calendar jobs while nobody was logged in. `audit` answers "is
 this job actually running?" from evidence of work, not from the scheduler's own status.
 
 Nothing here reads plists, logs or the clock, and nothing starts a process. Callers pass parsed
