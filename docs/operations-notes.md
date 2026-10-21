@@ -16,6 +16,12 @@ Gate state is guarded by atomic `mkdir` locks instead of `flock`, because macOS 
 
 A scheduled job that runs an agent and forwards its output will forward the runner's own error text when the runner fails. One morning the mail summary arrived as the single line `Error: Reached max turns (5)`. The same failure class had been fixed three weeks earlier in the weekly report pipeline, and that check was never copied to the mail job. A check that lives inside one script protects only that script. [`guards/notify-guard.sh`](../guards/notify-guard.sh) is the check as a standalone function with ten regression cases, including a real report that quotes "Error:" and must still pass.
 
+## Marked seen is not delivered
+
+A checker polled an email inbox and forwarded each new message to me through a chat bot. It wrote a message's id to its seen list before fetching the body. On 2026-09-29 one fetch timed out. The run logged that there was nothing new, refreshed its success marker, and the message was never forwarded or retried. Two other paths had the same shape: a failed list call read as an empty inbox and still refreshed the marker, and the send result was never checked, so a failed send was logged as sent. Every health signal measured a step (the list call worked), and none measured whether the message reached me.
+
+A message is now marked seen only after its body is in hand and the send returned ok, a failed list call leaves the marker alone, and each delivery goes into a ledger. A daily audit lists the inbox, compares it with the ledger and re-queues anything missing for the next run. It escalates only when a re-queued message is still undelivered twenty hours later. The same investigation found that the daily watchdog's alerts could never fire: it ran once a day behind the gate's default of two confirmations within six hours. Its sustained alerts, the red no-success alert and the delivery escalation, now need one confirmation. [`delivery.py`](../delivery.py) reimplements the ordering, the ledger and the audit with synthetic tests.
+
 ## Checker of checkers
 
 The watchdog that keeps the always-on agent alive found the agent with a process-name pattern. When the agent's command line changed, the pattern stopped matching. The watchdog decided the agent was dead and restarted a healthy agent every fifteen minutes for a day. An hourly self-test now verifies that the watchdog's pattern still matches a live process and scans the scripts for the retired pattern. A checker that nobody checks fails in the direction of confidence.
@@ -50,6 +56,12 @@ After a reboot the Mac mini sits at the login window. The user launchd domain do
 ## Liveness from the pane, not the process
 
 The liveness guard and the stuck detector read the tmux pane, not the process table. A working session shows a working indicator. A stuck session shows the indicator unchanged for two consecutive checks. An idle session shows an empty prompt. The detector learned to ignore the dim placeholder suggestion that Claude Code prints in an empty prompt, which once read as unsubmitted input and caused a restart loop. The [weekly brief script](https://github.com/dyjhhh/agent-os/blob/main/agents/weekly-brief.sh) in Agent OS waits for the same idle state before injecting its next prompt, instead of sleeping for a fixed time.
+
+## Alive is not receiving
+
+On 2026-09-28 the chat bot's inbound log had been silent for five days, and the watchdog called the listener healthy. It checked only that the listener process existed, and the listener can stop polling after repeated conflicts while its process stays up. Showing that the silence was real took a manual investigation: the connection to the provider was open with steady traffic, nothing was waiting at the provider, and no second consumer was reading the same bot. Nobody had written.
+
+The watchdog now also asks the provider how many updates are waiting. A live poller takes an update within seconds, so updates still waiting on three consecutive ticks, about four to six minutes, mean nobody is consuming them, and the existing silent restart runs. An unreachable provider gives no verdict. A separate log-only check reads the update ids the listener recorded: the provider numbers a bot's updates one by one, so the first id after a long silence shows whether the chat was quiet or updates went somewhere else. Ids can be renumbered after a long idle period, so an id that goes backwards or jumps very far is logged as inconclusive. [`listener.py`](../listener.py) is the classification as a pure function over synthetic ticks.
 
 ## Sync bridge
 
