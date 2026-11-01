@@ -1,14 +1,18 @@
 # Agent Reliability
 
+**Problem:** an agent can be running while its work is failing: missed jobs, lost messages, alerts for outages that never happened.\
+**What it shows:** reliability judgment for always-on agents: real incidents turned into small modules with failure-path tests.\
+**Run it in about 60 seconds:** clone, then `make test` (Python 3.10+ and bash; no third-party packages; fresh temporary HOME).
+
 [![tests](https://github.com/dyjhhh/agent-reliability/actions/workflows/test.yml/badge.svg)](https://github.com/dyjhhh/agent-reliability/actions/workflows/test.yml)
 
-An agent can be running while its work is failing. I built monitoring and recovery tools for a personal agent system after running into missed jobs, noisy alerts, and checks that trusted process status too much.
+I built monitoring and recovery tools for a personal agent system after running into missed jobs, noisy alerts, and checks that trusted process status too much.
 
 This public edition isolates ten parts of that work: **deciding when to alert**, **checking evidence that a job actually succeeded**, **replaying calendar jobs the scheduler skipped**, **refusing to send a runner's error text as a report**, **reconciling forwarded messages with the inbox they came from**, **telling a quiet chat listener from one that stopped receiving**, **keeping test runs out of real state**, **treating expired test evidence as a reminder rather than an outage**, **reading a scheduler's state from whichever store is live**, and **not charging a provider's limit refusal against a daily cap**. It runs locally with synthetic observations and sends no messages.
 
 ## Try it
 
-Python 3.10 or newer and bash, with no third-party dependencies:
+To run the demo and each suite separately:
 
 ```sh
 python3 demo.py
