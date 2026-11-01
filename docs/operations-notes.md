@@ -70,3 +70,27 @@ When the Mac mini cannot reach GitHub but the laptop can, a bridge script pulls 
 ## Kernel TIME_WAIT exhaustion
 
 The Mac mini's kernel accumulated 21,267 TIME_WAIT entries that never expired, against 16,384 ephemeral ports. New connections to some hosts failed while others worked, which looked like three unrelated outages: GitHub, cloud storage and a third external service. No process restart clears this; only a reboot does. The count is now a red line in the job audit, a suppression condition in the alert gate and the first field in the weekly health score. In [`reliability.py`](../reliability.py) the same idea is the `host_healthy=False` input: a degraded host suppresses alerts and does not build confirmation history.
+
+## Tests must not see the real home
+
+On 2026-10-26 a test run used the operator's real `HOME`. One fixture recorded a failure and a recovery a millisecond apart, and the code under test wrote both into the production failure history. The health check reads that history, so it sent three "recovered" notices for outages that never happened. The tests passed; the damage was outside the test directory. A fix was added to that one file's writer, which protected that file and nothing else.
+
+Two rules came out of it. Every suite runs through a wrapper that creates a fresh temporary `HOME`, starts the tests with `env -i` so no token or stray variable is inherited, and compares the size and modification time of the real state files before and after the run; a change fails the run. State writers also refuse, while a test framework is loaded, to write anywhere inside the account's real home, which they look up from the password database rather than from `$HOME`. A test that forgot to isolate itself is then refused instead of trusted. Two symptoms, a failure and a recovery a millisecond apart or history timestamps out of order, now point first at a leaking test. [`state_guard.py`](../state_guard.py) and [`tests/run-isolated.sh`](../tests/run-isolated.sh) are the portable version, and `make test` runs every Python suite through the wrapper.
+
+## Expired evidence is not an outage
+
+The alert system keeps a record of end-to-end tests: a person confirms that the phone alarm actually sounded, that the desktop alarm played and that a text message arrived. Each observation is valid for a few days. When one expired, the health check reported it through the same path as a broken channel, and for about 32 hours the operator was paged repeatedly about an outage that did not exist. Every channel was working; only the proof had aged out.
+
+Expired, missing or incomplete evidence now goes to a separate reminder: one yellow "retest due" notice per newly due set of items and one green notice when every announced item passes again. A test recorded as failed is still an incident and still pages, it never turns into a reminder by getting old, and it never produces the green notice. An unreadable record is unknown: it changes nothing rather than reporting every item as untested. [`acceptance.py`](../acceptance.py) is the classification and the reminder state as pure functions.
+
+## The scheduler moved its state
+
+A desktop agent app runs some scheduled jobs on the laptop and records each run in a SQLite file. On 2026-10-30 an automatic update of the app moved that record to a new database file. The old file stopped changing at its last run. The health check still read the old file, so it reported the scheduler as stalled while the jobs kept running.
+
+The check now opens every store it knows about, read-only, and uses the one with the newest recorded run, and it writes down which store the verdict came from. A store only records runs that happened, so taking the newest cannot hide a real stall: a stall that shows in every store still pages, and a pause recorded in the live store is not hidden by an old active row in the frozen one. A store name the check does not know about still reads as stale, which is the loud direction. [`stores.py`](../stores.py) is the selection rule over a synthetic table.
+
+## A refused run is not an attempt
+
+A scheduled job sends a queued batch of items to a hosted model for scoring, with a daily cap on items and two attempts per input window. On 2026-10-28 the provider refused a run with a spend-limit message: exit status 1, nothing scored, no tokens used. The job's ledger recorded it like any other run, so the whole batch was charged against the day's cap and the run counted as an attempt. The rest of that day's work did not run.
+
+A run that scored nothing, exited non-zero and printed a spend, usage or credit limit message is now recorded as a refusal. It is not charged to the daily cap or to the attempt count, and the queue and the watermark stay where they were, so the next tick retries the same window. A run that scored anything is partial and is charged as before. [`budget.py`](../budget.py) is the classification and the accounting as pure functions.

@@ -1,6 +1,6 @@
 .PHONY: test demo scan
 test:
-	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+	bash tests/run-isolated.sh tests
 	PYTHONDONTWRITEBYTECODE=1 python3 tools/test_sensitivity_scan.py
 	bash tests/test_notify_guard.sh
 demo:

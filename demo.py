@@ -1,9 +1,14 @@
 """Synthetic timeline, explicit clock, temporary database, no messages sent."""
+from contextlib import closing
 from pathlib import Path
+import sqlite3
 from tempfile import TemporaryDirectory
+from acceptance import classify, decide
+from budget import budget, classify_run, record, settle
 from delivery import DeliveryLedger
 from listener import check
 from reliability import AlertGate, job_health
+from stores import scheduler_health
 
 
 def alert_demo(temp):
@@ -85,11 +90,55 @@ def listener_demo():
         print(f"tick {number:<7} {row['verdict']}{extra}")
 
 
+def evidence_demo():
+    print("\nAcceptance evidence (the phone alarm test is five days old; its window is four)")
+    day = 86400
+    validity = {"phone_alarm": 4 * day, "desktop_alarm": 4 * day}
+    receipt = {"phone_alarm": {"status": "PASS", "observed_at": 95 * day, "evidence": "synthetic"},
+               "desktop_alarm": {"status": "PASS", "observed_at": 99 * day, "evidence": "synthetic"}}
+    state, sent, pages = {}, 0, 0
+    for _ in range(32 * 12):  # every five minutes for 32 hours
+        row = decide(classify(receipt, 100 * day, validity), state)
+        state, sent, pages = row["state"], sent + len(row["notices"]), pages + len(row["page"])
+    print(f"{'384 checks':12} reminders={sent} pages={pages}")
+    receipt["phone_alarm"] = {"status": "FAILED", "observed_at": 100 * day, "evidence": "synthetic"}
+    row = decide(classify(receipt, 100 * day, validity), state)
+    print(f"{'retest':12} {row['decision']} {row['page']} (an explicit failure still pages)")
+
+
+def store_demo(temp):
+    print("\nScheduler stores (an update moved the run record to a new file)")
+    old, new = Path(temp) / "state-legacy.db", Path(temp) / "state.db"
+    for path, last_run in ((old, 1000), (new, 50000)):
+        with closing(sqlite3.connect(path)) as conn:
+            conn.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY, status TEXT, last_run_at REAL)")
+            conn.execute("INSERT INTO jobs VALUES ('demo-job', 'ACTIVE', ?)", (last_run,))
+            conn.commit()
+    for label, paths in (("old only", [old]), ("both", [old, new])):
+        row = scheduler_health(paths, "demo-job", 50060, 600)
+        print(f"{label:12} {row['verdict']:6} from {Path(row['store']).name}")
+
+
+def budget_demo():
+    print("\nDaily cap (a spend-limit refusal, then a complete run)")
+    ledger, state = [], {"watermark": 0, "queue": ["item-1", "item-2"]}
+    for code, text, scored in ((1, "You've hit your monthly spend limit", 0), (0, "", 2)):
+        outcome = classify_run(code, text, queued=2, scored=scored, complete=bool(scored))
+        ledger = record(ledger, "day-1", "window-1", outcome, 2, scored)
+        state = settle(state, outcome, 3600, ["item-1", "item-2"][:scored])
+        row = budget(ledger, "day-1", "window-1")
+        print(f"{outcome:13} used={row['used']} attempts={row['attempts']} watermark={state['watermark']} "
+              f"queue={len(state['queue'])}")
+
+
 def main():
     with TemporaryDirectory() as temp:
         alert_demo(temp)
         delivery_demo(temp)
-    listener_demo()
+        listener_demo()
+        evidence_demo()
+        store_demo(temp)
+    budget_demo()
     print("Delivery acknowledgements and sends above are simulated. No notification was sent.")
 
 
