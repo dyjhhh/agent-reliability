@@ -1,14 +1,21 @@
 # Agent Reliability
 
 **Problem:** an agent can be running while its work is failing: missed jobs, lost messages, alerts for outages that never happened.\
-**What it shows:** reliability judgment for always-on agents: real incidents turned into small modules with failure-path tests.\
+**What it shows:** fixes for real failures in the agent harness I run, each with failure-path tests. One was a 32-hour false outage caused by expired test evidence.\
 **Run it in about 60 seconds:** clone, then `make test` (Python 3.10+ and bash; no third-party packages; fresh temporary HOME).
 
 [![tests](https://github.com/dyjhhh/agent-reliability/actions/workflows/test.yml/badge.svg)](https://github.com/dyjhhh/agent-reliability/actions/workflows/test.yml)
 
-I built monitoring and recovery tools for a personal agent system after running into missed jobs, noisy alerts, and checks that trusted process status too much.
+## Applying this on an engineering team
 
-This public edition isolates ten parts of that work: **deciding when to alert**, **checking evidence that a job actually succeeded**, **replaying calendar jobs the scheduler skipped**, **refusing to send a runner's error text as a report**, **reconciling forwarded messages with the inbox they came from**, **telling a quiet chat listener from one that stopped receiving**, **keeping test runs out of real state**, **treating expired test evidence as a reminder rather than an outage**, **reading a scheduler's state from whichever store is live**, and **not charging a provider's limit refusal against a daily cap**. It runs locally with synthetic observations and sends no messages.
+- **On-call paging for agent services.** Page only after observations spaced in time, suppress while the host itself is degraded, and dedupe so one incident sends one notice ([`reliability.py`](reliability.py)).
+- **Outcome checks, not step checks.** A daily audit compares the source inbox with the delivery ledger and re-queues what is missing; it re-queues exactly the message the old ordering lost ([`delivery.py`](delivery.py)).
+- **Stale proof is a reminder, not a page.** Expired end-to-end evidence produces one retest reminder; only a recorded failure pages ([`acceptance.py`](acceptance.py)).
+- **Test isolation in CI.** Every suite runs in a fresh HOME under `env -i`, and the run fails if real state files changed ([`tests/run-isolated.sh`](tests/run-isolated.sh)).
+
+I built these monitoring and recovery tools for the agent harness I run, after running into missed jobs, noisy alerts, and checks that trusted process status too much.
+
+Each failure is a row in [Decisions worth inspecting](#decisions-worth-inspecting). It runs locally with synthetic observations and sends no messages.
 
 ## Try it
 
